@@ -14,20 +14,20 @@ import {
   getFirestore, collection, addDoc, onSnapshot, serverTimestamp, query, orderBy,
   updateDoc, doc, getDoc, setDoc
 } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
-
 // ------------------------------
 // Config — replace with your project values
 // ------------------------------
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: "AIzaSyCBQfwpbnDdPPl0LdeXPWAc_o-Nd67EnsY",
-  authDomain: "jobs-ff5a9.firebaseapp.com",
-  projectId: "jobs-ff5a9",
-  storageBucket: "jobs-ff5a9.firebasestorage.app",
-  messagingSenderId: "110232650978",
-  appId: "1:110232650978:web:64c20408089e75487f8abb",
-  measurementId: "G-WW68CSEMM6"
+  apiKey: "AIzaSyBstvmJZrn231V10wHcSBxYn2qN-7bgyGA",
+  authDomain: "my-jobsearch-28d9d.firebaseapp.com",
+  projectId: "my-jobsearch-28d9d",
+  storageBucket: "my-jobsearch-28d9d.appspot.com",
+  messagingSenderId: "407120108131",
+  appId: "1:407120108131:web:ec7f49c3cc3a233169f656",
+  measurementId: "G-CFRN6P8ZQG"
 };
+
 
 let app, auth, db, unsubscribeJobs = null;
 let firebaseReady = false;
