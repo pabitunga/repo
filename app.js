@@ -5,13 +5,19 @@
 // Firebase (CDN, modular v10)
 // ------------------------------
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js';
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, sendEmailVerification, updateProfile, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js';
-import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, query, orderBy, updateDoc, doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
+import {
+  getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword,
+  signOut, sendEmailVerification, updateProfile, setPersistence, browserLocalPersistence,
+  sendPasswordResetEmail
+} from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js';
+import {
+  getFirestore, collection, addDoc, onSnapshot, serverTimestamp, query, orderBy,
+  updateDoc, doc, getDoc, setDoc
+} from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
 
 // ------------------------------
 // Config — replace with your project values
 // ------------------------------
-// Tip: Create a Web App in Firebase Console → Copy config → paste below.
 const firebaseConfig = {
   apiKey: "YOUR_API_KEY",
   authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
@@ -23,6 +29,13 @@ const firebaseConfig = {
 
 let app, auth, db, unsubscribeJobs = null;
 let firebaseReady = false;
+
+function toast(msg) {
+  const wrap = document.getElementById('toasts'); if (!wrap) return alert(msg);
+  const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; wrap.appendChild(t);
+  setTimeout(() => { t.style.opacity = 0; t.style.transform = 'translateY(-6px)'; }, 2000);
+  setTimeout(() => t.remove(), 2600);
+}
 
 function initFirebase() {
   try {
@@ -46,13 +59,13 @@ function initFirebase() {
 // App State
 // ------------------------------
 const state = {
-  role: 'GUEST', // CANDIDATE | EMPLOYER | ADMIN | GUEST
+  role: 'GUEST', // auto-from Firestore after login
   user: null,
   saved: new Set(JSON.parse(localStorage.getItem('savedJobs') || '[]')),
-  jobs: [] // hydrated from Firestore; falls back to demo if Firebase not set
+  jobs: [] // from Firestore; fallback to demo if Firebase not set
 };
 
-// Demo data (used only if Firebase not configured)
+// Demo data for local/dev without Firebase
 const DEMO_JOBS = [
   { id:'demo-1', title:'Assistant Professor of Computer Science', institution:'Stanford University', location:'Stanford, CA, USA', departments:['Computer Science'], levels:['Assistant Professor'], description:'Research in AI/ML; teach UG+PG; mentor students.', deadline:'2025-10-15', salaryRange:'$120k–$160k', applicationLink:'https://stanford.edu/apply', approved:true, active:true, postedByUid:'demo', createdAt:'2025-09-01' },
   { id:'demo-2', title:'Professor of Mathematics', institution:'MIT', location:'Cambridge, MA, USA', departments:['Mathematics'], levels:['Full Professor'], description:'Tenured position; outstanding research in pure/applied math; lead initiatives.', deadline:'2025-09-20', salaryRange:'$180k–$220k', applicationLink:'https://mit.edu/faculty-search', approved:true, active:true, postedByUid:'demo', createdAt:'2025-08-28' },
@@ -74,13 +87,6 @@ const $ = (q, el=document) => el.querySelector(q);
 const $$ = (q, el=document) => Array.from(el.querySelectorAll(q));
 const fmtDate = (d) => new Date(d).toLocaleDateString();
 const daysLeft = (d) => Math.ceil((new Date(d) - new Date()) / (1000*60*60*24));
-
-function toast(msg) {
-  const wrap = $('#toasts'); if (!wrap) return alert(msg);
-  const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; wrap.appendChild(t);
-  setTimeout(() => { t.style.opacity = 0; t.style.transform = 'translateY(-6px)'; }, 2000);
-  setTimeout(() => t.remove(), 2600);
-}
 function saveSync() { localStorage.setItem('savedJobs', JSON.stringify([...state.saved])); $('#kpiSaved').textContent = state.saved.size; }
 
 // ------------------------------
@@ -128,13 +134,12 @@ function initPostDropdowns() {
 // ------------------------------
 function jobCard(j) {
   const dl = daysLeft(j.deadline);
-  const expired = dl < 0 || j.archived || !j.active;
+  const expired = dl < 0 || j.archived || j.active === false;
   const deadlineText = expired ? 'Expired' : (dl <= 7 ? `${dl} day${dl!==1?'s':''} left` : fmtDate(j.deadline));
   const deadlineCls = expired ? '' : (dl <= 7 ? 'deadline urgent' : 'deadline');
   const pending = j.approved === null;
   const isOwner = !!state.user && j.postedByUid === state.user.uid;
-  const canSeeAdmin = state.role === 'ADMIN';
-  const adminControls = (canSeeAdmin && pending) ? `
+  const adminControls = (state.role === 'ADMIN' && pending) ? `
     <div class="admin-actions">
       <button class="btn" data-approve="${j.id}">Approve</button>
       <button class="btn" data-reject="${j.id}">Reject</button>
@@ -150,11 +155,11 @@ function jobCard(j) {
       </div>
       ${status}
     </div>
-    <div class="meta">${ownerChip} ${[...(j.departments||[])].map(d => `<span class="tag">${d}</span>`).join('')} ${(j.levels||[]).map(l => `<span class=tag>${l}</span>`).join('')}</div>
+    <div class="meta">${ownerChip} ${(j.departments||[]).map(d => `<span class="tag">${d}</span>`).join('')} ${(j.levels||[]).map(l => `<span class=tag>${l}</span>`).join('')}</div>
     <p class="desc">${j.description||''}</p>
     <div class="footer">
       <div>
-        <div class="deadline ${deadlineCls}">${deadlineText}</div>
+        <div class="${deadlineCls}">${deadlineText}</div>
         ${j.salaryRange ? `<div style="font-size:12px;color:var(--color-text-2)">${j.salaryRange}</div>` : ''}
       </div>
       <div style="display:flex; gap:8px; align-items:center;">
@@ -173,7 +178,7 @@ function renderJobs() {
   const fd = $('#fDept').value; const fl = $('#fLevel').value; const fL = $('#fLoc').value;
 
   let list = state.jobs.filter(j => j.active !== false);
-  // Visibility rules
+  // Visibility: Admin sees all; everyone sees approved; owner sees their own pending
   list = list.filter(j => {
     const approved = j.approved === true;
     const mine = state.user && j.postedByUid === state.user.uid;
@@ -181,7 +186,6 @@ function renderJobs() {
     return admin || approved || mine;
   });
 
-  // UI filters
   list = list.filter(j => (
     (!q || (j.title||'').toLowerCase().includes(q) || (j.institution||'').toLowerCase().includes(q)) &&
     (!fd || (j.departments||[]).includes(fd)) && (!fl || (j.levels||[]).includes(fl)) &&
@@ -194,7 +198,6 @@ function renderJobs() {
 
   $('#kpiActive').textContent = state.jobs.filter(j => j.active !== false && j.approved).length;
 }
-
 function renderFeatured() {
   const grid = $('#featuredGrid'); if (!grid) return;
   const today = new Date(); const soon = new Date(); soon.setDate(today.getDate()+30);
@@ -202,7 +205,6 @@ function renderFeatured() {
   grid.innerHTML = list.length ? list.map(jobCard).join('') : '<div class="empty">No featured jobs right now.</div>';
   $('#kpiFeatured').textContent = list.length;
 }
-
 function renderAll() { renderJobs(); renderFeatured(); populateFilters(); }
 
 // ------------------------------
@@ -213,7 +215,14 @@ function subscribeJobs() {
   if (unsubscribeJobs) { unsubscribeJobs(); }
   const qy = query(collection(db, 'jobs'), orderBy('createdAt', 'desc'));
   unsubscribeJobs = onSnapshot(qy, (snap) => {
-    state.jobs = snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.() ? d.data().createdAt.toDate().toISOString().slice(0,10) : (d.data().createdAt || '') }));
+    state.jobs = snap.docs.map(d => {
+      const data = d.data();
+      return {
+        id: d.id,
+        ...data,
+        createdAt: data.createdAt?.toDate?.() ? data.createdAt.toDate().toISOString().slice(0,10) : (data.createdAt || '')
+      };
+    });
     renderAll();
   }, (err) => { console.error(err); toast('Failed to load jobs'); state.jobs = DEMO_JOBS; renderAll(); });
 }
@@ -228,11 +237,11 @@ const authEls = {
   authTitle: $('#authTitle'), nameWrap: $('#nameWrap'), authName: $('#authName'),
   authEmail: $('#authEmail'), authPass: $('#authPass'), authSubmit: $('#authSubmit'),
   sendVerify: $('#sendVerify'), verifyNote: $('#verifyNote'),
-  roleName: $('#roleName')
+  forgotPass: $('#forgotPass'), roleName: $('#roleName')
 };
 
 function openAuth(mode='signin') {
-  authEls.authTitle.textContent = mode === 'signup' ? 'Create Account' : 'Sign In';
+  authEls.authTitle.textContent = mode === 'signup' ? 'Create Account' : 'Login';
   authEls.nameWrap.hidden = mode !== 'signup';
   authEls.authModal.classList.add('show');
   authEls.modeSignin.classList.toggle('primary', mode==='signin');
@@ -247,22 +256,28 @@ $('#closeAuth').addEventListener('click', closeAuth);
 $('#modeSignin').addEventListener('click', () => openAuth('signin'));
 $('#modeSignup').addEventListener('click', () => openAuth('signup'));
 
+// Login / Sign Up
 $('#authSubmit').addEventListener('click', async () => {
   if (!firebaseReady) { toast('Add Firebase config first'); return; }
   const mode = $('#authSubmit').dataset.mode || 'signin';
   const email = authEls.authEmail.value.trim(); const pass = authEls.authPass.value;
   if (!email || !pass) return toast('Enter email & password');
+
   try {
     if (mode === 'signup') {
+      // Create and require email verification before allowing login
       const cred = await createUserWithEmailAndPassword(auth, email, pass);
-      const name = authEls.authName.value.trim(); if (name) await updateProfile(cred.user, { displayName: name });
+      const name = authEls.authName.value.trim();
+      if (name) await updateProfile(cred.user, { displayName: name });
       await setDoc(doc(db, 'users', cred.user.uid), { email, displayName: name || '', role: 'CANDIDATE', createdAt: serverTimestamp() }, { merge: true });
       await sendEmailVerification(cred.user);
-      toast('Account created. Verification email sent.');
-      authEls.verifyNote.style.display = '';
+      toast('Account created. Verification email sent. Verify, then login.');
+      await signOut(auth);          // enforce: sign-up completes only after verification
+      openAuth('signin');           // switch back to login
+      authEls.verifyNote.style.display = ''; // reminder
     } else {
       await signInWithEmailAndPassword(auth, email, pass);
-      toast('Signed in');
+      toast('Logged in');
       closeAuth();
     }
   } catch (e) {
@@ -270,7 +285,25 @@ $('#authSubmit').addEventListener('click', async () => {
   }
 });
 
-$('#sendVerify').addEventListener('click', async () => { try { if (auth?.currentUser) { await sendEmailVerification(auth.currentUser); toast('Verification email sent'); } } catch(e){ toast('Failed to send email'); }});
+// Forgot Password
+authEls.forgotPass.addEventListener('click', async () => {
+  if (!firebaseReady) return toast('Add Firebase config first');
+  try {
+    let email = authEls.authEmail.value.trim();
+    if (!email) email = window.prompt('Enter your account email for password reset:')?.trim();
+    if (!email) return;
+    await sendPasswordResetEmail(auth, email);
+    toast('Password reset email sent');
+  } catch (e) {
+    console.error(e); toast('Failed to send reset email');
+  }
+});
+
+// Resend verification
+$('#sendVerify').addEventListener('click', async () => {
+  try { if (auth?.currentUser) { await sendEmailVerification(auth.currentUser); toast('Verification email sent'); } }
+  catch(e){ toast('Failed to send email'); }
+});
 
 // React to auth state
 function updateAuthUI() {
@@ -348,7 +381,6 @@ $('#grid').addEventListener('click', async (e) => {
     try { if (firebaseReady) await updateDoc(doc(db, 'jobs', id), { approved: false, active:false }); toast('Rejected'); } catch(e){ console.error(e); toast('Rejection failed'); }
   }
 });
-
 $('#featuredGrid').addEventListener('click', (e) => {
   const det = e.target.closest('[data-details]');
   const save = e.target.closest('[data-save]');
@@ -385,18 +417,16 @@ $('#closeDetails').addEventListener('click', () => $('#detailsModal').classList.
 // ------------------------------
 // Auth state + user profile doc
 // ------------------------------
-function hydrateFromUserDoc(user) {
-  return (async () => {
-    if (!firebaseReady) return;
-    const uref = doc(db, 'users', user.uid);
-    const snap = await getDoc(uref);
-    if (!snap.exists()) {
-      await setDoc(uref, { email: user.email, displayName: user.displayName || '', role: 'CANDIDATE', createdAt: serverTimestamp() });
-      state.role = 'CANDIDATE';
-    } else {
-      state.role = snap.data().role || 'CANDIDATE';
-    }
-  })();
+async function hydrateFromUserDoc(user) {
+  if (!firebaseReady) return;
+  const uref = doc(db, 'users', user.uid);
+  const snap = await getDoc(uref);
+  if (!snap.exists()) {
+    await setDoc(uref, { email: user.email, displayName: user.displayName || '', role: 'CANDIDATE', createdAt: serverTimestamp() });
+    state.role = 'CANDIDATE';
+  } else {
+    state.role = snap.data().role || 'CANDIDATE';
+  }
 }
 
 initFirebase();
@@ -405,7 +435,17 @@ subscribeJobs();
 if (firebaseReady) {
   onAuthStateChanged(auth, async (user) => {
     if (user) {
-      state.user = { uid: user.uid, email: user.email, displayName: user.displayName || '', emailVerified: !!user.emailVerified };
+      if (!user.emailVerified) {
+        // Enforce email verification before completing login
+        state.user = null; state.role = 'GUEST';
+        openAuth('signin');
+        document.getElementById('verifyNote').style.display = '';
+        document.getElementById('sendVerify').style.display = '';
+        toast('Please verify your email, then login.');
+        await signOut(auth);
+        return;
+      }
+      state.user = { uid: user.uid, email: user.email, displayName: user.displayName || '', emailVerified: true };
       await hydrateFromUserDoc(user);
       updateAuthUI();
       renderAll();
@@ -422,14 +462,14 @@ if (firebaseReady) {
 }
 
 // ------------------------------
-// Self-tests (utilities only)
+// Global listeners
+// ------------------------------
+['q','fDept','fLevel','fLoc'].forEach(id => document.getElementById(id).addEventListener('input', renderJobs));
+document.getElementById('clearFilters').addEventListener('click', () => { $('#q').value=''; $('#fDept').value=''; $('#fLevel').value=''; $('#fLoc').value=''; renderJobs(); });
+
+// ------------------------------
+// Self-test (utilities)
 // ------------------------------
 (function runSelfTests(){
   try { if (typeof daysLeft('2099-01-01') !== 'number') throw new Error('daysLeft'); } catch(e){ console.warn('Self-test failed:', e); toast('⚠️ Self-tests failed (utilities)'); }
 })();
-
-// ------------------------------
-// Global listeners
-// ------------------------------
-['q','fDept','fLevel','fLoc'].forEach(id => document.getElementById(id).addEventListener('input', renderJobs));
-$('#clearFilters').addEventListener('click', () => { $('#q').value=''; $('#fDept').value=''; $('#fLevel').value=''; $('#fLoc').value=''; renderJobs(); });
