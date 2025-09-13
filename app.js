@@ -1,10 +1,7 @@
 // Neo UI — App Logic with Firebase Auth + Firestore (v10 modular)
-// Includes: signup popup to send verification email on OK,
-// roles (Candidate/Employer/Employee alias), employer approval,
-// admin approve/reject, archive/unarchive, featured & archived,
-// and admin instant posting (approved:true).
+// Signup popup now guaranteed (race-free) + native confirm fallback.
+// Roles, employer approval, admin approve/reject, archive, featured, etc.
 
-// Firebase (CDN, modular v10)
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js';
 import {
   getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword,
@@ -16,7 +13,9 @@ import {
   updateDoc, doc, getDoc, setDoc
 } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
 
+// ------------------------------
 // Firebase Config (your project)
+// ------------------------------
 const firebaseConfig = {
   apiKey: "AIzaSyBstvmJZrn231V10wHcSBxYn2qN-7bgyGA",
   authDomain: "my-jobsearch-28d9d.firebaseapp.com",
@@ -50,7 +49,9 @@ function initFirebase() {
   }
 }
 
+// ------------------------------
 // App State
+// ------------------------------
 const state = {
   role: 'GUEST',             // 'GUEST' | 'CANDIDATE' | 'EMPLOYER' | 'ADMIN'
   user: null,                // { uid, email, displayName, emailVerified, employerApproved? }
@@ -58,36 +59,46 @@ const state = {
   jobs: []
 };
 
-// Preset Lists (for dropdowns)
-const SUBJECTS = ["Mathematics","Computer Science","Physics","Chemistry","Biology","Economics","Electrical Engineering","Mechanical Engineering","Civil Engineering","Management","Statistics","Data Science"]; 
-const LEVELS = ["Assistant Professor","Associate Professor","Full Professor","Lecturer","Postdoctoral Researcher","Research Scientist"]; 
-const INSTITUTIONS = ["IIT Patna","IISc Bangalore","IIT Bombay","IIT Madras","IIT Delhi","IIM Ahmedabad","MIT","Stanford University","Harvard University","UC Berkeley","Caltech","NIT Trichy"]; 
-const LOCATIONS = ["Patna, Bihar, India","Delhi, India","Mumbai, Maharashtra, India","Chennai, Tamil Nadu, India","Bengaluru, Karnataka, India","Cambridge, MA, USA","Stanford, CA, USA","Pasadena, CA, USA","Berkeley, CA, USA","Princeton, NJ, USA"]; 
+// Tracks the signup flow to prevent onAuthStateChanged from kicking you out
+let inSignupFlow = false;
 
+// ------------------------------
+// Presets
+// ------------------------------
+const SUBJECTS = ["Mathematics","Computer Science","Physics","Chemistry","Biology","Economics","Electrical Engineering","Mechanical Engineering","Civil Engineering","Management","Statistics","Data Science"];
+const LEVELS = ["Assistant Professor","Associate Professor","Full Professor","Lecturer","Postdoctoral Researcher","Research Scientist"];
+const INSTITUTIONS = ["IIT Patna","IISc Bangalore","IIT Bombay","IIT Madras","IIT Delhi","IIM Ahmedabad","MIT","Stanford University","Harvard University","UC Berkeley","Caltech","NIT Trichy"];
+const LOCATIONS = ["Patna, Bihar, India","Delhi, India","Mumbai, Maharashtra, India","Chennai, Tamil Nadu, India","Bengaluru, Karnataka, India","Cambridge, MA, USA","Stanford, CA, USA","Pasadena, CA, USA","Berkeley, CA, USA","Princeton, NJ, USA"];
+
+// ------------------------------
 // Tiny DOM helpers
+// ------------------------------
 const $ = (q, el=document) => el.querySelector(q);
 const $$ = (q, el=document) => Array.from(el.querySelectorAll(q));
 const fmtDate = (d) => new Date(d).toLocaleDateString();
 const daysLeft = (d) => Math.ceil((new Date(d) - new Date()) / (1000*60*60*24));
 function saveSync() { localStorage.setItem('savedJobs', JSON.stringify([...state.saved])); const kpi = $('#kpiSaved'); if (kpi) kpi.textContent = state.saved.size; }
 
+// ------------------------------
 // Theme
+// ------------------------------
 (function initTheme(){
   const last = localStorage.getItem('theme') || 'light';
   document.documentElement.setAttribute('data-color-scheme', last);
   const t = $('#themeToggle'); if (t) t.textContent = last === 'dark' ? '☀️' : '🌙';
 })();
-const themeBtn = $('#themeToggle');
-if (themeBtn) themeBtn.addEventListener('click', () => {
+$('#themeToggle')?.addEventListener('click', () => {
   const cur = document.documentElement.getAttribute('data-color-scheme');
   const next = cur === 'dark' ? 'light' : 'dark';
   document.documentElement.setAttribute('data-color-scheme', next);
   localStorage.setItem('theme', next);
-  themeBtn.textContent = next === 'dark' ? '☀️' : '🌙';
+  $('#themeToggle').textContent = next === 'dark' ? '☀️' : '🌙';
   toast(`Switched to ${next} mode`);
 });
 
-// Filters + dropdown helpers
+// ------------------------------
+// Filters + dropdowns
+// ------------------------------
 function populateFilters() {
   const fDept = $('#fDept'), fLevel = $('#fLevel'), fLoc = $('#fLoc');
   if (!fDept || !fLevel || !fLoc) return;
@@ -143,7 +154,9 @@ function initPostDropdowns() {
   selectFirst('pDept'); selectFirst('pLevel');
 }
 
+// ------------------------------
 // Rendering
+// ------------------------------
 function jobCard(j) {
   const dl = daysLeft(j.deadline);
   const expired = dl < 0 || j.archived || j.active === false;
@@ -208,9 +221,9 @@ function renderJobs() {
     (!fd || (j.departments||[]).includes(fd)) && (!fl || (j.levels||[]).includes(fl)) &&
     (!fL || ((j.location||'').split(',')[1]||'').trim() === fL)
   ));
-  const ri = $('#resultsInfo'); if (ri) ri.textContent = `${list.length} position${list.length!==1?'s':''} found`;
+  $('#resultsInfo')?.textContent = `${list.length} position${list.length!==1?'s':''} found`;
   grid.innerHTML = list.length ? list.map(jobCard).join('') : '';
-  const empty = $('#emptyState'); if (empty) empty.style.display = list.length ? 'none' : 'block';
+  $('#emptyState') && ($('#emptyState').style.display = list.length ? 'none' : 'block');
   const kpiA = $('#kpiActive'); if (kpiA) kpiA.textContent = state.jobs.filter(j => j.active !== false && !j.archived && j.approved).length;
 }
 function renderFeatured() {
@@ -230,7 +243,9 @@ function renderArchived() {
 }
 function renderAll() { renderJobs(); renderFeatured(); renderArchived(); populateFilters(); }
 
+// ------------------------------
 // Auto-archive (ADMIN client)
+// ------------------------------
 async function autoArchiveExpiredJobs() {
   if (!firebaseReady || state.role !== 'ADMIN') return;
   const today = new Date();
@@ -241,7 +256,9 @@ async function autoArchiveExpiredJobs() {
   }
 }
 
+// ------------------------------
 // Firestore sync
+// ------------------------------
 function subscribeJobs() {
   if (!firebaseReady || !db) return;
   if (unsubscribeJobs) unsubscribeJobs();
@@ -249,16 +266,16 @@ function subscribeJobs() {
   unsubscribeJobs = onSnapshot(qy, async (snap) => {
     state.jobs = snap.docs.map(d => {
       const data = d.data();
-      return { id: d.id, ...data,
-        createdAt: data.createdAt?.toDate?.() ? data.createdAt.toDate().toISOString().slice(0,10) : (data.createdAt || '')
-      };
+      return { id: d.id, ...data, createdAt: data.createdAt?.toDate?.() ? data.createdAt.toDate().toISOString().slice(0,10) : (data.createdAt || '') };
     });
     renderAll();
     await autoArchiveExpiredJobs();
   }, (err) => { console.error(err); toast('Failed to load jobs'); });
 }
 
+// ------------------------------
 // Auth UI refs
+// ------------------------------
 const authEls = {
   signInBtn: $('#signInBtn'), signOutBtn: $('#signOutBtn'),
   authModal: $('#authModal'), closeAuth: $('#closeAuth'),
@@ -269,14 +286,6 @@ const authEls = {
   forgotPass: $('#forgotPass'), roleName: $('#roleName'),
   roleWrap: $('#roleWrap')
 };
-
-// Verify Prompt helpers (after Sign Up)
-let pendingVerifyPrompt = false;
-const verifyPrompt = document.getElementById('verifyPrompt');
-const verifyEmailSpan = document.getElementById('verifyPromptEmail');
-const sendVerifyNowBtn = document.getElementById('sendVerifyNow');
-const closeVerifyPromptBtn = document.getElementById('closeVerifyPrompt');
-const cancelVerifyPromptBtn = document.getElementById('cancelVerifyPrompt');
 
 function openAuth(mode='signin') {
   if (!authEls.authModal) return;
@@ -290,16 +299,80 @@ function openAuth(mode='signin') {
 }
 function closeAuth() { if (authEls.authModal) authEls.authModal.classList.remove('show'); }
 
-// Buttons
 $('#modeOpenPost')?.addEventListener('click', () => $('#postJobBtn')?.click());
-if (authEls.signInBtn) authEls.signInBtn.addEventListener('click', () => openAuth('signin'));
-if (authEls.signOutBtn) authEls.signOutBtn.addEventListener('click', async () => { await signOut(auth); toast('Signed out'); });
-if (authEls.closeAuth) authEls.closeAuth.addEventListener('click', closeAuth);
-if (authEls.modeSignin) authEls.modeSignin.addEventListener('click', () => openAuth('signin'));
-if (authEls.modeSignup) authEls.modeSignup.addEventListener('click', () => openAuth('signup'));
+authEls.signInBtn?.addEventListener('click', () => openAuth('signin'));
+authEls.signOutBtn?.addEventListener('click', async () => { await signOut(auth); toast('Signed out'); });
+authEls.closeAuth?.addEventListener('click', closeAuth);
+authEls.modeSignin?.addEventListener('click', () => openAuth('signin'));
+authEls.modeSignup?.addEventListener('click', () => openAuth('signup'));
 
-// Login / Sign Up handler (with role selection)
-if (authEls.authSubmit) authEls.authSubmit.addEventListener('click', async () => {
+// ------------------------------
+// Verify Prompt helpers (modal + fallback)
+// ------------------------------
+const verifyPrompt = document.getElementById('verifyPrompt');
+const verifyEmailSpan = document.getElementById('verifyPromptEmail');
+const sendVerifyNowBtn = document.getElementById('sendVerifyNow');
+const closeVerifyPromptBtn = document.getElementById('closeVerifyPrompt');
+const cancelVerifyPromptBtn = document.getElementById('cancelVerifyPrompt');
+
+async function runVerifyFlowWithModal(email) {
+  if (authEls?.authModal) authEls.authModal.classList.remove('show');
+  if (verifyEmailSpan) verifyEmailSpan.textContent = email || auth.currentUser?.email || '';
+  verifyPrompt?.classList.add('show');
+
+  return new Promise((resolve) => {
+    const cleanup = () => {
+      verifyPrompt?.classList.remove('show');
+      sendVerifyNowBtn?.removeEventListener('click', onOk);
+      closeVerifyPromptBtn?.removeEventListener('click', onCancel);
+      cancelVerifyPromptBtn?.removeEventListener('click', onCancel);
+    };
+    const onOk = async () => {
+      try {
+        const u = auth.currentUser;
+        if (!u) { toast('Not signed in'); cleanup(); resolve(false); return; }
+        await sendEmailVerification(u);
+        toast('Verification email sent');
+        cleanup(); resolve(true);
+      } catch (e) {
+        console.error(e); toast('Could not send verification email'); cleanup(); resolve(false);
+      }
+    };
+    const onCancel = () => { cleanup(); resolve(false); };
+    sendVerifyNowBtn?.addEventListener('click', onOk);
+    closeVerifyPromptBtn?.addEventListener('click', onCancel);
+    cancelVerifyPromptBtn?.addEventListener('click', onCancel);
+  });
+}
+
+async function runVerifyFlowFallback(email) {
+  const ok = window.confirm(`Send verification email to ${email || auth.currentUser?.email || ''}?`);
+  if (!ok) return false;
+  try {
+    const u = auth.currentUser;
+    if (!u) { toast('Not signed in'); return false; }
+    await sendEmailVerification(u);
+    toast('Verification email sent');
+    return true;
+  } catch (e) {
+    console.error(e); toast('Could not send verification email');
+    return false;
+  }
+}
+
+async function requestVerification(email) {
+  // Try modal first; if missing (or not mounted), fallback to confirm
+  if (verifyPrompt && sendVerifyNowBtn && closeVerifyPromptBtn && cancelVerifyPromptBtn) {
+    return await runVerifyFlowWithModal(email);
+  } else {
+    return await runVerifyFlowFallback(email);
+  }
+}
+
+// ------------------------------
+// Login / Sign Up handler
+// ------------------------------
+authEls.authSubmit?.addEventListener('click', async () => {
   if (!firebaseReady) { toast('Add Firebase config first'); return; }
   const mode = authEls.authSubmit.dataset.mode || 'signin';
   const email = authEls.authEmail.value.trim(); const pass = authEls.authPass.value;
@@ -307,6 +380,7 @@ if (authEls.authSubmit) authEls.authSubmit.addEventListener('click', async () =>
 
   try {
     if (mode === 'signup') {
+      inSignupFlow = true; // <-- set BEFORE we create the user (prevents race)
       let selectedRole = (document.querySelector('input[name="authRole"]:checked')?.value) || 'CANDIDATE';
       if (selectedRole === 'EMPLOYEE') selectedRole = 'CANDIDATE'; // alias
 
@@ -314,22 +388,22 @@ if (authEls.authSubmit) authEls.authSubmit.addEventListener('click', async () =>
       const name = authEls.authName.value.trim();
       if (name) await updateProfile(cred.user, { displayName: name });
 
-      // Create profile doc
-      const userDoc = {
-        email,
-        displayName: name || '',
-        role: selectedRole,
+      await setDoc(doc(db, 'users', cred.user.uid), {
+        email, displayName: name || '', role: selectedRole,
         employerApproved: selectedRole === 'EMPLOYER' ? false : undefined,
         createdAt: serverTimestamp()
-      };
-      await setDoc(doc(db, 'users', cred.user.uid), userDoc, { merge: true });
+      }, { merge: true });
 
-      // Show popup asking to send verification
-      pendingVerifyPrompt = true;
-      if (authEls?.authModal) authEls.authModal.classList.remove('show');
-      if (verifyEmailSpan) verifyEmailSpan.textContent = email || cred.user.email || '';
-      if (verifyPrompt) verifyPrompt.classList.add('show');
-      toast('Account created. Please verify your email.');
+      // Ask user to send the verification email (modal or confirm)
+      const sent = await requestVerification(email);
+      // After the prompt, sign out and go back to login (whether sent or not)
+      await signOut(auth);
+      openAuth('signin');
+      if (authEls.verifyNote) authEls.verifyNote.style.display = '';
+      $('#sendVerify') && ($('#sendVerify').style.display = '');
+      inSignupFlow = false;
+
+      toast(sent ? 'Check your email for the verification link.' : 'You can send verification later from Login.');
     } else {
       await signInWithEmailAndPassword(auth, email, pass);
       toast('Logged in');
@@ -337,11 +411,12 @@ if (authEls.authSubmit) authEls.authSubmit.addEventListener('click', async () =>
     }
   } catch (e) {
     console.error(e); toast(e.message || 'Auth error');
+    inSignupFlow = false;
   }
 });
 
 // Forgot Password
-if (authEls.forgotPass) authEls.forgotPass.addEventListener('click', async () => {
+authEls.forgotPass?.addEventListener('click', async () => {
   try {
     let email = authEls.authEmail.value.trim();
     if (!email) email = window.prompt('Enter your account email for password reset:')?.trim();
@@ -353,14 +428,13 @@ if (authEls.forgotPass) authEls.forgotPass.addEventListener('click', async () =>
   }
 });
 
-// Resend verification from Login modal
+// Resend verification (from Login)
 const resendBtn = $('#sendVerify');
-if (resendBtn) resendBtn.addEventListener('click', async () => {
+resendBtn?.addEventListener('click', async () => {
   try {
     if (auth?.currentUser) {
       await sendEmailVerification(auth.currentUser);
-      toast('Verification email sent');
-      return;
+      toast('Verification email sent'); return;
     }
     const email = authEls.authEmail.value.trim();
     const pass  = authEls.authPass.value;
@@ -374,43 +448,21 @@ if (resendBtn) resendBtn.addEventListener('click', async () => {
   }
 });
 
-// Verify Prompt events
-async function exitVerifyFlow() {
-  pendingVerifyPrompt = false;
-  if (verifyPrompt) verifyPrompt.classList.remove('show');
-  await signOut(auth);
-  openAuth('signin');
-  if (authEls.verifyNote) authEls.verifyNote.style.display = '';
-  if (resendBtn) resendBtn.style.display = '';
-}
-if (sendVerifyNowBtn) sendVerifyNowBtn.addEventListener('click', async () => {
-  try {
-    const u = auth.currentUser;
-    if (!u) { toast('Not signed in'); return; }
-    await sendEmailVerification(u);
-    toast('Verification email sent');
-  } catch (e) {
-    console.error(e); toast('Could not send verification email');
-  } finally {
-    await exitVerifyFlow();
-  }
-});
-if (closeVerifyPromptBtn) closeVerifyPromptBtn.addEventListener('click', exitVerifyFlow);
-if (cancelVerifyPromptBtn) cancelVerifyPromptBtn.addEventListener('click', exitVerifyFlow);
-
+// ------------------------------
 // React to auth state
+// ------------------------------
 function updateAuthUI() {
   const u = state.user;
-  if (authEls.signInBtn)  authEls.signInBtn.style.display = u ? 'none' : '';
-  if (authEls.signOutBtn) authEls.signOutBtn.style.display = u ? '' : 'none';
+  authEls.signInBtn && (authEls.signInBtn.style.display = u ? 'none' : '');
+  authEls.signOutBtn && (authEls.signOutBtn.style.display = u ? '' : 'none');
 
   let label = state.role || (u ? 'CANDIDATE' : 'GUEST');
   if (label === 'EMPLOYER' && !state.user?.employerApproved) label = 'EMPLOYER (pending)';
-  if (authEls.roleName) authEls.roleName.textContent = label;
+  authEls.roleName && (authEls.roleName.textContent = label);
 
   const unverified = (u && !u.emailVerified);
-  if (authEls.verifyNote) authEls.verifyNote.style.display = unverified ? '' : 'none';
-  if (resendBtn) resendBtn.style.display = unverified ? '' : 'none';
+  authEls.verifyNote && (authEls.verifyNote.style.display = unverified ? '' : 'none');
+  resendBtn && (resendBtn.style.display = unverified ? '' : 'none');
 }
 
 function openDetails(id) {
@@ -440,9 +492,10 @@ function openDetails(id) {
 }
 $('#closeDetails')?.addEventListener('click', () => $('#detailsModal')?.classList.remove('show'));
 
-// Post / Approvals / Archive
-const postBtn = $('#postJobBtn');
-if (postBtn) postBtn.addEventListener('click', (e) => {
+// ------------------------------
+// Job actions (post/approve/reject/archive)
+// ------------------------------
+$('#postJobBtn')?.addEventListener('click', (e) => {
   e.preventDefault();
   if (!state.user) { openAuth('signin'); return; }
   if (!state.user.emailVerified && state.role !== 'ADMIN') { openAuth('signin'); toast('Please verify your email first'); return; }
@@ -485,7 +538,7 @@ $('#submitPost')?.addEventListener('click', async () => {
   } catch (e) { console.error(e); toast('Failed to post job'); }
 });
 
-// Grid events
+// Grid actions
 $('#grid')?.addEventListener('click', async (e) => {
   const save = e.target.closest?.('[data-save]');
   const det  = e.target.closest?.('[data-details]');
@@ -493,35 +546,12 @@ $('#grid')?.addEventListener('click', async (e) => {
   const rj   = e.target.closest?.('[data-reject]');
   const ar   = e.target.closest?.('[data-archive]');
   const un   = e.target.closest?.('[data-unarchive]');
-
-  if (save) {
-    const id = save.getAttribute('data-save');
-    if (state.saved.has(id)) state.saved.delete(id); else state.saved.add(id);
-    saveSync(); renderJobs(); toast(state.saved.has(id) ? 'Job saved' : 'Removed from saved');
-  }
+  if (save) { const id = save.getAttribute('data-save'); if (state.saved.has(id)) state.saved.delete(id); else state.saved.add(id); saveSync(); renderJobs(); toast(state.saved.has(id) ? 'Job saved' : 'Removed from saved'); }
   if (det) { openDetails(det.getAttribute('data-details')); }
-  if (ap) {
-    if (state.role !== 'ADMIN') return toast('Admin only');
-    const id = ap.getAttribute('data-approve');
-    try { await updateDoc(doc(db, 'jobs', id), { approved: true }); toast('Approved'); } catch(e){ console.error(e); toast('Approval failed'); }
-  }
-  if (rj) {
-    if (state.role !== 'ADMIN') return toast('Admin only');
-    const id = rj.getAttribute('data-reject');
-    try { await updateDoc(doc(db, 'jobs', id), { approved: false, active:false }); toast('Rejected'); } catch(e){ console.error(e); toast('Rejection failed'); }
-  }
-  if (ar) {
-    if (state.role !== 'ADMIN') return toast('Admin only');
-    const id = ar.getAttribute('data-archive');
-    try { await updateDoc(doc(db, 'jobs', id), { archived: true, active: false }); toast('Archived'); }
-    catch(e){ console.error(e); toast('Archive failed'); }
-  }
-  if (un) {
-    if (state.role !== 'ADMIN') return toast('Admin only');
-    const id = un.getAttribute('data-unarchive');
-    try { await updateDoc(doc(db, 'jobs', id), { archived: false, active: true }); toast('Unarchived'); }
-    catch(e){ console.error(e); toast('Unarchive failed'); }
-  }
+  if (ap)  { if (state.role !== 'ADMIN') return toast('Admin only'); const id = ap.getAttribute('data-approve'); try { await updateDoc(doc(db, 'jobs', id), { approved: true }); toast('Approved'); } catch(e){ console.error(e); toast('Approval failed'); } }
+  if (rj)  { if (state.role !== 'ADMIN') return toast('Admin only'); const id = rj.getAttribute('data-reject');  try { await updateDoc(doc(db, 'jobs', id), { approved: false, active:false }); toast('Rejected'); } catch(e){ console.error(e); toast('Rejection failed'); } }
+  if (ar)  { if (state.role !== 'ADMIN') return toast('Admin only'); const id = ar.getAttribute('data-archive');  try { await updateDoc(doc(db, 'jobs', id), { archived: true, active: false }); toast('Archived'); } catch(e){ console.error(e); toast('Archive failed'); } }
+  if (un)  { if (state.role !== 'ADMIN') return toast('Admin only'); const id = un.getAttribute('data-unarchive');try { await updateDoc(doc(db, 'jobs', id), { archived: false, active: true }); toast('Unarchived'); } catch(e){ console.error(e); toast('Unarchive failed'); } }
 });
 $('#featuredGrid')?.addEventListener('click', async (e) => {
   const det = e.target.closest?.('[data-details]');
@@ -530,30 +560,21 @@ $('#featuredGrid')?.addEventListener('click', async (e) => {
   const un   = e.target.closest?.('[data-unarchive]');
   if (det) { openDetails(det.getAttribute('data-details')); }
   if (save) { const id = save.getAttribute('data-save'); if (state.saved.has(id)) state.saved.delete(id); else state.saved.add(id); saveSync(); renderFeatured(); toast(state.saved.has(id) ? 'Job saved' : 'Removed from saved'); }
-  if (ar) { if (state.role !== 'ADMIN') return toast('Admin only'); const id = ar.getAttribute('data-archive');
-    try { await updateDoc(doc(db, 'jobs', id), { archived: true, active: false }); toast('Archived'); } catch(e){ console.error(e); toast('Archive failed'); } }
-  if (un) { if (state.role !== 'ADMIN') return toast('Admin only'); const id = un.getAttribute('data-unarchive');
-    try { await updateDoc(doc(db, 'jobs', id), { archived: false, active: true }); toast('Unarchived'); } catch(e){ console.error(e); toast('Unarchive failed'); } }
+  if (ar)  { if (state.role !== 'ADMIN') return toast('Admin only'); const id = ar.getAttribute('data-archive');  try { await updateDoc(doc(db, 'jobs', id), { archived: true, active: false }); toast('Archived'); } catch(e){ console.error(e); toast('Archive failed'); } }
+  if (un)  { if (state.role !== 'ADMIN') return toast('Admin only'); const id = un.getAttribute('data-unarchive');try { await updateDoc(doc(db, 'jobs', id), { archived: false, active: true }); toast('Unarchived'); } catch(e){ console.error(e); toast('Unarchive failed'); } }
 });
 $('#archivedGrid')?.addEventListener('click', async (e) => {
   const un  = e.target.closest?.('[data-unarchive]');
   const det = e.target.closest?.('[data-details]');
   const save = e.target.closest?.('[data-save]');
   if (det) { openDetails(det.getAttribute('data-details')); }
-  if (save) {
-    const id = save.getAttribute('data-save');
-    if (state.saved.has(id)) state.saved.delete(id); else state.saved.add(id);
-    saveSync(); renderArchived(); toast(state.saved.has(id) ? 'Job saved' : 'Removed from saved');
-  }
-  if (un) {
-    if (state.role !== 'ADMIN') return toast('Admin only');
-    const id = un.getAttribute('data-unarchive');
-    try { await updateDoc(doc(db, 'jobs', id), { archived: false, active: true }); toast('Unarchived'); }
-    catch(e){ console.error(e); toast('Unarchive failed'); }
-  }
+  if (save) { const id = save.getAttribute('data-save'); if (state.saved.has(id)) state.saved.delete(id); else state.saved.add(id); saveSync(); renderArchived(); toast(state.saved.has(id) ? 'Job saved' : 'Removed from saved'); }
+  if (un)  { if (state.role !== 'ADMIN') return toast('Admin only'); const id = un.getAttribute('data-unarchive');try { await updateDoc(doc(db, 'jobs', id), { archived: false, active: true }); toast('Unarchived'); } catch(e){ console.error(e); toast('Unarchive failed'); } }
 });
 
-// Auth state + user profile doc
+// ------------------------------
+// Auth state + profile doc
+// ------------------------------
 async function hydrateFromUserDoc(user) {
   const uref = doc(db, 'users', user.uid);
   const snap = await getDoc(uref);
@@ -574,15 +595,16 @@ subscribeJobs();
 onAuthStateChanged(auth, async (user) => {
   if (user) {
     if (!user.emailVerified) {
-      if (pendingVerifyPrompt) {
+      // If we're in signup flow, DO NOT kick the user out; we show popup/confirm first
+      if (inSignupFlow) {
         state.user = { uid: user.uid, email: user.email, displayName: user.displayName || '', emailVerified: false };
         updateAuthUI();
-        return; // popup will finish the flow
+        return;
       }
       state.user = null; state.role = 'GUEST';
       openAuth('signin');
-      if (authEls.verifyNote) authEls.verifyNote.style.display = '';
-      if (resendBtn) resendBtn.style.display = '';
+      authEls.verifyNote && (authEls.verifyNote.style.display = '');
+      $('#sendVerify') && ($('#sendVerify').style.display = '');
       toast('Please verify your email, then login.');
       await signOut(auth);
       return;
@@ -598,7 +620,9 @@ onAuthStateChanged(auth, async (user) => {
   }
 });
 
+// ------------------------------
 // Global listeners
+// ------------------------------
 ['q','fDept','fLevel','fLoc'].forEach(id => {
   const el = document.getElementById(id);
   if (el) el.addEventListener('input', renderJobs);
@@ -609,7 +633,9 @@ $('#clearFilters')?.addEventListener('click', () => {
   renderJobs();
 });
 
+// ------------------------------
 // Self-test
+// ------------------------------
 (function runSelfTests(){
   try { if (typeof daysLeft('2099-01-01') !== 'number') throw new Error('daysLeft'); } catch(e){ console.warn('Self-test failed:', e); }
 })();
