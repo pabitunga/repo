@@ -166,18 +166,34 @@ footer{padding:22px 0 40px;color:var(--color-text-2);text-align:center;}
 
 /* Modals */
 .modal{
-  position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+  position:fixed; inset:0;
+  display:none;                 /* hidden by default */
+  align-items:center; justify-content:center;
   backdrop-filter:blur(6px);
-  background:color-mix(in oklab, var(--color-bg) 45%, rgba(0,0,0,.4));
+  background: rgba(0,0,0,.45);  /* simpler, reliable */
   z-index: 9999; padding:18px;
+
+  /* IMPORTANT: don't capture clicks when hidden */
+  pointer-events: none;
 }
-.modal.show{ display:flex; }
+.modal.show{
+  display:flex;
+  pointer-events: auto;         /* only capture when shown */
+}
 .sheet{
-  width:min(920px,94vw); background:var(--color-surface); border:1px solid var(--color-border);
+  width:min(920px,94vw);
+  background:var(--color-surface);
+  border:1px solid var(--color-border);
   border-radius:18px; box-shadow:var(--shadow-lg); overflow:hidden;
+
+  /* allow interaction inside the modal */
+  pointer-events: auto;
 }
 .sheet>header,.sheet>.body{padding:14px;}
-.sheet>header{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--color-border);}
+.sheet>header{
+  display:flex;align-items:center;justify-content:space-between;
+  border-bottom:1px solid var(--color-border);
+}
 
 /* Stacks & Utilities */
 .stack-4>*+*{margin-top:12px;}
