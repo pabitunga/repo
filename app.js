@@ -170,11 +170,18 @@ function jobCard(j) {
   const pending = j.approved === null;
   const isOwner = !!state.user && j.postedByUid === state.user.uid;
 
-  const adminControls = (state.role === 'ADMIN' && pending) ? `
-    <div class="admin-actions">
-      <button class="btn" data-approve="${j.id}">Approve</button>
-      <button class="btn" data-reject="${j.id}">Reject</button>
-    </div>` : '';
+  // ADMIN controls: Approve/Reject for pending + Archive/Unarchive always for admin
+  let adminControls = '';
+  if (state.role === 'ADMIN') {
+    const approveBtns = pending
+      ? `<button class="btn" data-approve="${j.id}">Approve</button>
+         <button class="btn" data-reject="${j.id}">Reject</button>`
+      : '';
+    const archiveBtn = j.archived
+      ? `<button class="btn" data-unarchive="${j.id}">Unarchive</button>`
+      : `<button class="btn" data-archive="${j.id}">Archive</button>`;
+    adminControls = `<div class="admin-actions">${approveBtns}${archiveBtn}</div>`;
+  }
 
   const status = pending ? '<span class="status pending">Pending Approval</span>'
                          : (j.approved ? '<span class="status approved">Approved</span>' : '');
