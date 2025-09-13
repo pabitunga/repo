@@ -1,5 +1,5 @@
 // Neo UI — App Logic with Firebase Auth + Firestore (v10 modular)
-// Fill your Firebase config below and deploy.
+// Add your Firebase config below.
 
 // ------------------------------
 // Firebase (CDN, modular v10)
@@ -59,10 +59,10 @@ function initFirebase() {
 // App State
 // ------------------------------
 const state = {
-  role: 'GUEST', // auto-from Firestore after login
-  user: null,
+  role: 'GUEST',             // 'GUEST' | 'CANDIDATE' | 'EMPLOYER' | 'ADMIN'
+  user: null,                // { uid, email, displayName, emailVerified, employerApproved? }
   saved: new Set(JSON.parse(localStorage.getItem('savedJobs') || '[]')),
-  jobs: [] // from Firestore; fallback to demo if Firebase not set
+  jobs: []                   // Firestore-backed, demo fallback if Firebase missing
 };
 
 // Demo data for local/dev without Firebase
@@ -177,7 +177,7 @@ function renderJobs() {
   const q = $('#q').value.trim().toLowerCase();
   const fd = $('#fDept').value; const fl = $('#fLevel').value; const fL = $('#fLoc').value;
 
-  let list = state.jobs.filter(j => j.active !== false);
+  let list = state.jobs.filter(j => j.active !== false && !j.archived);
   // Visibility: Admin sees all; everyone sees approved; owner sees their own pending
   list = list.filter(j => {
     const approved = j.approved === true;
@@ -196,25 +196,50 @@ function renderJobs() {
   grid.innerHTML = list.length ? list.map(jobCard).join('') : '';
   $('#emptyState').style.display = list.length ? 'none' : 'block';
 
-  $('#kpiActive').textContent = state.jobs.filter(j => j.active !== false && j.approved).length;
+  $('#kpiActive').textContent = state.jobs.filter(j => j.active !== false && !j.archived && j.approved).length;
 }
+
 function renderFeatured() {
   const grid = $('#featuredGrid'); if (!grid) return;
   const today = new Date(); const soon = new Date(); soon.setDate(today.getDate()+30);
-  const list = state.jobs.filter(j => j.active !== false && j.approved && new Date(j.deadline) >= today && new Date(j.deadline) <= soon).slice(0, 6);
+  const list = state.jobs
+    .filter(j => j.active !== false && !j.archived && j.approved && new Date(j.deadline) >= today && new Date(j.deadline) <= soon)
+    .slice(0, 6);
   grid.innerHTML = list.length ? list.map(jobCard).join('') : '<div class="empty">No featured jobs right now.</div>';
   $('#kpiFeatured').textContent = list.length;
 }
-function renderAll() { renderJobs(); renderFeatured(); populateFilters(); }
+
+function renderArchived() {
+  const grid = $('#archivedGrid'); if (!grid) return;
+  const today = new Date();
+  const list = state.jobs.filter(j => j.archived || new Date(j.deadline) < today);
+  grid.innerHTML = list.length ? list.map(jobCard).join('') : '<div class="empty">No archived jobs.</div>';
+}
+
+function renderAll() { renderJobs(); renderFeatured(); renderArchived(); populateFilters(); }
+
+// ------------------------------
+// Auto-archive (ADMIN clients write flag to Firestore)
+// ------------------------------
+async function autoArchiveExpiredJobs() {
+  if (!firebaseReady || state.role !== 'ADMIN') return;
+  const today = new Date();
+  for (const j of state.jobs) {
+    if (!j.archived && j.active !== false && new Date(j.deadline) < today) {
+      try { await updateDoc(doc(db, 'jobs', j.id), { archived: true, active: false }); } catch(e){ /* ignore */ }
+    }
+  }
+}
 
 // ------------------------------
 // Firestore sync
 // ------------------------------
 function subscribeJobs() {
-  if (!firebaseReady || !db) { state.jobs = DEMO_JOBS; renderAll(); return; }
+  if (!firebaseReady || !db) { state.jobs = DEMO_JOBS; renderAll(); return;
+  }
   if (unsubscribeJobs) { unsubscribeJobs(); }
   const qy = query(collection(db, 'jobs'), orderBy('createdAt', 'desc'));
-  unsubscribeJobs = onSnapshot(qy, (snap) => {
+  unsubscribeJobs = onSnapshot(qy, async (snap) => {
     state.jobs = snap.docs.map(d => {
       const data = d.data();
       return {
@@ -224,6 +249,7 @@ function subscribeJobs() {
       };
     });
     renderAll();
+    await autoArchiveExpiredJobs();
   }, (err) => { console.error(err); toast('Failed to load jobs'); state.jobs = DEMO_JOBS; renderAll(); });
 }
 
@@ -237,12 +263,14 @@ const authEls = {
   authTitle: $('#authTitle'), nameWrap: $('#nameWrap'), authName: $('#authName'),
   authEmail: $('#authEmail'), authPass: $('#authPass'), authSubmit: $('#authSubmit'),
   sendVerify: $('#sendVerify'), verifyNote: $('#verifyNote'),
-  forgotPass: $('#forgotPass'), roleName: $('#roleName')
+  forgotPass: $('#forgotPass'), roleName: $('#roleName'),
+  roleWrap: $('#roleWrap')
 };
 
 function openAuth(mode='signin') {
   authEls.authTitle.textContent = mode === 'signup' ? 'Create Account' : 'Login';
   authEls.nameWrap.hidden = mode !== 'signup';
+  authEls.roleWrap.hidden = mode !== 'signup';
   authEls.authModal.classList.add('show');
   authEls.modeSignin.classList.toggle('primary', mode==='signin');
   authEls.modeSignup.classList.toggle('primary', mode==='signup');
@@ -256,7 +284,7 @@ $('#closeAuth').addEventListener('click', closeAuth);
 $('#modeSignin').addEventListener('click', () => openAuth('signin'));
 $('#modeSignup').addEventListener('click', () => openAuth('signup'));
 
-// Login / Sign Up
+// Login / Sign Up with role selection
 $('#authSubmit').addEventListener('click', async () => {
   if (!firebaseReady) { toast('Add Firebase config first'); return; }
   const mode = $('#authSubmit').dataset.mode || 'signin';
@@ -265,14 +293,26 @@ $('#authSubmit').addEventListener('click', async () => {
 
   try {
     if (mode === 'signup') {
-      // Create and require email verification before allowing login
+      const selectedRole = (document.querySelector('input[name="authRole"]:checked')?.value) || 'CANDIDATE';
       const cred = await createUserWithEmailAndPassword(auth, email, pass);
       const name = authEls.authName.value.trim();
       if (name) await updateProfile(cred.user, { displayName: name });
-      await setDoc(doc(db, 'users', cred.user.uid), { email, displayName: name || '', role: 'CANDIDATE', createdAt: serverTimestamp() }, { merge: true });
+
+      // Employer accounts require admin approval once (employerApproved:false)
+      const userDoc = {
+        email,
+        displayName: name || '',
+        role: selectedRole,
+        employerApproved: selectedRole === 'EMPLOYER' ? false : undefined,
+        createdAt: serverTimestamp()
+      };
+      await setDoc(doc(db, 'users', cred.user.uid), userDoc, { merge: true });
+
       await sendEmailVerification(cred.user);
-      toast('Account created. Verification email sent. Verify, then login.');
-      await signOut(auth);          // enforce: sign-up completes only after verification
+      toast(selectedRole === 'EMPLOYER'
+        ? 'Employer account created. Verify email, then wait for admin approval.'
+        : 'Account created. Verification email sent. Verify, then login.');
+      await signOut(auth);          // enforce verification before login
       openAuth('signin');           // switch back to login
       authEls.verifyNote.style.display = ''; // reminder
     } else {
@@ -310,7 +350,11 @@ function updateAuthUI() {
   const u = state.user;
   authEls.signInBtn.style.display = u ? 'none' : '';
   authEls.signOutBtn.style.display = u ? '' : 'none';
-  authEls.roleName.textContent = state.role || (u ? 'CANDIDATE' : 'GUEST');
+
+  let label = state.role || (u ? 'CANDIDATE' : 'GUEST');
+  if (label === 'EMPLOYER' && !state.user?.employerApproved) label = 'EMPLOYER (pending)';
+  authEls.roleName.textContent = label;
+
   const unverified = (u && !u.emailVerified);
   authEls.verifyNote.style.display = unverified ? '' : 'none';
   const sendBtn = document.getElementById('sendVerify');
@@ -323,6 +367,11 @@ function updateAuthUI() {
 $('#postJobBtn').addEventListener('click', () => {
   if (!state.user) { openAuth('signin'); return; }
   if (!state.user.emailVerified) { openAuth('signin'); toast('Please verify your email first'); return; }
+  // Employer must be admin-approved to post
+  if (state.role === 'EMPLOYER' && !state.user.employerApproved) {
+    toast('Your employer account is awaiting admin approval.');
+    return;
+  }
   initPostDropdowns(); $('#postModal').classList.add('show');
 });
 $('#closePost').addEventListener('click', () => $('#postModal').classList.remove('show'));
@@ -330,6 +379,8 @@ $('#closePost').addEventListener('click', () => $('#postModal').classList.remove
 $('#submitPost').addEventListener('click', async () => {
   if (!state.user) { openAuth('signin'); return; }
   if (!state.user.emailVerified) { toast('Verify your email to post'); return; }
+  if (state.role === 'EMPLOYER' && !state.user.employerApproved) { toast('Employer approval pending'); return; }
+
   const title = $('#pTitle').value.trim();
   const inst = getSelectOrOther('pInstSel','pInstOther');
   const loc  = getSelectOrOther('pLocSel','pLocOther');
@@ -339,18 +390,31 @@ $('#submitPost').addEventListener('click', async () => {
   const dead = $('#pDead').value.trim();
   const link = $('#pLink').value.trim();
   if (!title || !inst || !loc || !desc || !dead || dept.length===0 || level.length===0) { toast('Please complete all required fields'); return; }
+
   try {
-    const approved = (state.role === 'EMPLOYER' || state.role === 'ADMIN') ? true : null;
-    if (!firebaseReady) { // demo mode fallback
+    // Approval logic:
+    // - ADMIN: auto-approved
+    // - EMPLOYER (approved): auto-approved (visible to everyone)
+    // - CANDIDATE: pending admin approval
+    const approved =
+      (state.role === 'ADMIN') ? true :
+      (state.role === 'EMPLOYER' && state.user.employerApproved) ? true :
+      null;
+
+    if (!firebaseReady) {
       const id = 'demo-' + Date.now();
-      state.jobs.unshift({ id, title, institution:inst, location:loc, departments:dept, levels:level, description:desc, deadline:dead, applicationLink:link || '', salaryRange:'', approved, active:true, postedByUid:'demo', createdAt: new Date().toISOString().slice(0,10) });
-      $('#postModal').classList.remove('show'); renderAll(); toast(approved ? 'Job posted (demo)' : 'Submitted (demo)'); return;
+      state.jobs.unshift({ id, title, institution:inst, location:loc, departments:dept, levels:level, description:desc, deadline:dead, applicationLink:link || '', salaryRange:'', approved, active:true, archived:false, postedByUid:'demo', createdAt: new Date().toISOString().slice(0,10) });
+      $('#postModal').classList.remove('show'); renderAll();
+      toast(approved ? 'Job posted (demo)' : 'Submitted (demo)');
+      return;
     }
+
     await addDoc(collection(db, 'jobs'), {
       title, institution:inst, location:loc, departments:dept, levels:level,
       description:desc, deadline:dead, applicationLink:link || '', salaryRange:'',
       approved, active:true, archived:false, postedByUid: state.user.uid, createdAt: serverTimestamp()
     });
+
     $('#postModal').classList.remove('show');
     ['pTitle','pInstOther','pLocOther','pDeptOther','pLevelOther','pDesc','pDead','pLink'].forEach(id => { const el = document.getElementById(id); if (el) el.value=''; });
     toast(approved ? 'Job posted' : 'Submitted for approval');
@@ -391,6 +455,7 @@ $('#featuredGrid').addEventListener('click', (e) => {
 function openDetails(id) {
   const j = state.jobs.find(x => x.id === id); if (!j) return;
   const dl = daysLeft(j.deadline);
+  const expired = dl < 0;
   $('#detailsBody').innerHTML = `
     <div class="stack-4">
       <div style="display:flex; justify-content:space-between; align-items:start; gap:16px">
@@ -403,7 +468,7 @@ function openDetails(id) {
       <div class="meta">${(j.departments||[]).map(d => `<span class=tag>${d}</span>`).join('')} ${(j.levels||[]).map(l => `<span class=tag>${l}</span>`).join('')}</div>
       <p>${j.description||''}</p>
       <div style="display:flex; gap:10px; align-items:center; justify-content:space-between">
-        <div class="deadline ${dl<=7 && dl>=0 ? 'urgent':''}">${dl<0?'Expired':`Deadline: ${fmtDate(j.deadline)} (${dl} day${dl!==1?'s':''} left)`}</div>
+        <div class="deadline ${expired ? '' : (dl<=7 ? 'urgent':'')}">${expired?'Expired':`Deadline: ${fmtDate(j.deadline)} (${dl} day${dl!==1?'s':''} left)`}</div>
         <div style="display:flex; gap:8px">
           ${j.applicationLink?`<a class="btn" href="${j.applicationLink}" target="_blank" rel="noopener">Apply</a>`:''}
           <button class="btn" data-save="${j.id}">${state.saved.has(j.id)?'Saved':'Save'}</button>
@@ -424,8 +489,11 @@ async function hydrateFromUserDoc(user) {
   if (!snap.exists()) {
     await setDoc(uref, { email: user.email, displayName: user.displayName || '', role: 'CANDIDATE', createdAt: serverTimestamp() });
     state.role = 'CANDIDATE';
+    state.user = { ...state.user, employerApproved: false };
   } else {
-    state.role = snap.data().role || 'CANDIDATE';
+    const data = snap.data();
+    state.role = data.role || 'CANDIDATE';
+    state.user = { ...state.user, employerApproved: !!data.employerApproved };
   }
 }
 
