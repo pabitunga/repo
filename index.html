@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="color-scheme" content="light dark" />
   <title>Neo Jobs</title>
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -19,7 +20,7 @@
         <button id="postJobBtn" class="btn">Post a Job</button>
         <button id="signInBtn" class="btn primary">Login / Sign up</button>
         <button id="signOutBtn" class="btn" style="display:none">Sign out</button>
-        <button id="themeToggle" class="theme-toggle" title="Toggle theme">🌙</button>
+        <button id="themeToggle" class="btn theme-toggle" title="Toggle theme">🌙</button>
       </div>
     </div>
   </nav>
@@ -57,7 +58,7 @@
   <!-- Featured -->
   <section class="section" id="featured">
     <div class="container">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div class="section-head">
         <h3>Featured (closing within 30 days)</h3>
       </div>
       <div id="featuredGrid" class="grid"></div>
@@ -67,7 +68,7 @@
   <!-- Filters + Open positions -->
   <section class="section" id="open">
     <div class="container">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div class="section-head">
         <h3>Open Positions</h3>
         <small id="resultsInfo">0 positions found</small>
       </div>
@@ -109,7 +110,7 @@
   <!-- Archived -->
   <section class="section" id="archived">
     <div class="container">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div class="section-head">
         <h3>Archived (expired or archived by admin)</h3>
       </div>
       <div id="archivedGrid" class="grid"></div>
@@ -134,7 +135,7 @@
         <button id="closeAuth" class="btn ghost">✖</button>
       </header>
       <div class="body">
-        <div style="display:flex;gap:8px;margin-bottom:8px">
+        <div class="tabs">
           <button id="modeSignin" class="btn primary">Login</button>
           <button id="modeSignup" class="btn">Create Account</button>
         </div>
@@ -156,7 +157,7 @@
 
         <div id="roleWrap" class="stack-4" style="margin-top:6px" hidden>
           <label><small>Choose role for this account</small></label>
-          <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <div class="role-choices">
             <label class="chip"><input type="radio" name="authRole" value="CANDIDATE" checked /> Candidate</label>
             <label class="chip"><input type="radio" name="authRole" value="EMPLOYER" /> Employer</label>
             <label class="chip"><input type="radio" name="authRole" value="EMPLOYEE" /> Employee</label>
@@ -164,10 +165,10 @@
           <small>Employers require admin approval after email verification.</small>
         </div>
 
-        <div style="display:flex;gap:10px;align-items:center;margin-top:10px">
+        <div class="auth-actions">
           <button id="authSubmit" class="btn primary" data-mode="signin">Continue</button>
           <button id="forgotPass" class="btn">Forgot password</button>
-          <span id="verifyNote" style="display:none">Please verify your email to continue.</span>
+          <span id="verifyNote" class="verify-note" style="display:none">Please verify your email to continue.</span>
           <button id="sendVerify" class="btn" style="display:none">Send verification</button>
         </div>
       </div>
@@ -182,7 +183,7 @@
         <button id="closePost" class="btn ghost">✖</button>
       </header>
       <div class="body">
-        <div class="grid" style="grid-template-columns: repeat(auto-fit,minmax(260px,1fr)); gap:12px">
+        <div class="grid grid-form">
           <label>Job Title
             <input id="pTitle" class="input" type="text" placeholder="Assistant Professor (CS)" />
           </label>
@@ -235,7 +236,7 @@
             <input id="pLink" class="input" type="url" placeholder="https://example.com/apply" />
           </label>
         </div>
-        <div style="display:flex;justify-content:flex-end;margin-top:12px">
+        <div class="right">
           <button id="submitPost" class="btn primary">Submit</button>
         </div>
       </div>
@@ -254,16 +255,18 @@
   </div>
 
   <!-- VERIFY PROMPT MODAL (after Sign Up) -->
-  <div class="modal" id="verifyPrompt">
-    <div class="sheet">
+  <div class="modal" id="verifyPrompt" aria-hidden="true">
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="verifyTitle">
       <header>
-        <h3>Email verification</h3>
+        <h3 id="verifyTitle">Email verification</h3>
         <button class="btn ghost" id="closeVerifyPrompt">✖</button>
       </header>
       <div class="body">
-        <p>To activate your account, we’ll send a verification link to <strong id="verifyPromptEmail"></strong>.</p>
+        <p>To activate your account, we’ll send a verification link to
+          <strong id="verifyPromptEmail"></strong>.
+        </p>
         <p>Press <strong>OK</strong> to receive the email.</p>
-        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:12px">
+        <div class="right" style="margin-top:12px">
           <button class="btn" id="cancelVerifyPrompt">Cancel</button>
           <button class="btn primary" id="sendVerifyNow">OK, send email</button>
         </div>
@@ -271,6 +274,7 @@
     </div>
   </div>
 
+  <!-- App -->
   <script type="module" src="app.js"></script>
 </body>
 </html>
