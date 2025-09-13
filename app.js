@@ -1,7 +1,8 @@
 // Neo UI — App Logic with Firebase Auth + Firestore (v10 modular)
 // Includes: Login/Signup with role (Candidate/Employer/Employee alias),
 // email verification gating, forgot password, employer approval,
-// admin approve/reject, featured + archived sections, and auto-archive (admin client).
+// admin approve/reject, archive/unarchive, featured + archived sections,
+// and ADMIN instant posting (auto-approved).
 
 // ------------------------------
 // Firebase (CDN, modular v10)
@@ -36,7 +37,6 @@ let firebaseReady = false;
 function toast(msg) {
   const wrap = document.getElementById('toasts'); if (!wrap) return alert(msg);
   const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; wrap.appendChild(t);
-  // fade out
   setTimeout(() => { t.style.opacity = 0; t.style.transform = 'translateY(-6px)'; }, 2000);
   setTimeout(() => t.remove(), 2600);
 }
@@ -302,7 +302,7 @@ const authEls = {
   modeSignin: $('#modeSignin'), modeSignup: $('#modeSignup'),
   authTitle: $('#authTitle'), nameWrap: $('#nameWrap'), authName: $('#authName'),
   authEmail: $('#authEmail'), authPass: $('#authPass'), authSubmit: $('#authSubmit'),
-  sendVerify: $('#sendVerify'), verifyNote: $('#verifyNote'],
+  sendVerify: $('#sendVerify'), verifyNote: $('#verifyNote'),
   forgotPass: $('#forgotPass'), roleName: $('#roleName'),
   roleWrap: $('#roleWrap')
 };
@@ -427,6 +427,7 @@ if (postBtn) postBtn.addEventListener('click', (e) => {
   e.preventDefault();
   if (!state.user) { openAuth('signin'); return; }
   if (!state.user.emailVerified) { openAuth('signin'); toast('Please verify your email first'); return; }
+  // ADMIN bypasses employer approval check; only EMPLOYER is restricted if not approved
   if (state.role === 'EMPLOYER' && !state.user.employerApproved) {
     toast('Your employer account is awaiting admin approval.');
     return;
@@ -451,12 +452,13 @@ if (submitPost) submitPost.addEventListener('click', async () => {
   const link = $('#pLink')?.value.trim();
   if (!title || !inst || !loc || !desc || !dead || dept.length===0 || level.length===0) { toast('Please complete all required fields'); return; }
 
-  try {
-    const approved =
-      (state.role === 'ADMIN') ? true :
-      (state.role === 'EMPLOYER' && state.user.employerApproved) ? true :
-      null;
+  // ADMIN auto-approve; approved employer auto-approve; others pending (null)
+  const approved =
+    (state.role === 'ADMIN') ? true :
+    (state.role === 'EMPLOYER' && state.user.employerApproved) ? true :
+    null;
 
+  try {
     await addDoc(collection(db, 'jobs'), {
       title, institution:inst, location:loc, departments:dept, levels:level,
       description:desc, deadline:dead, applicationLink:link || '', salaryRange:'',
@@ -476,7 +478,6 @@ if (grid) grid.addEventListener('click', async (e) => {
   const det  = e.target.closest?.('[data-details]');
   const ap   = e.target.closest?.('[data-approve]');
   const rj   = e.target.closest?.('[data-reject]');
-  // NEW: archive/unarchive
   const ar   = e.target.closest?.('[data-archive]');
   const un   = e.target.closest?.('[data-unarchive]');
 
