@@ -632,6 +632,34 @@ $('#clearFilters')?.addEventListener('click', () => {
   if (q) q.value=''; if (d) d.value=''; if (l) l.value=''; if (L) L.value='';
   renderJobs();
 });
+// ===== Modal safety: never let invisible overlays block clicks =====
+function closeAllModals() {
+  document.querySelectorAll('.modal.show').forEach(m => m.classList.remove('show'));
+}
+
+// Close on ESC
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeAllModals();
+});
+
+// Click on backdrop closes modal (but not clicks inside the sheet)
+document.querySelectorAll('.modal').forEach(m => {
+  m.addEventListener('click', (e) => {
+    if (e.target === m) m.classList.remove('show');
+  });
+});
+
+// Defensive: make sure no modal is open at load
+window.addEventListener('load', () => closeAllModals());
+
+// When opening one modal, close others so only one overlay exists
+function openOnly(modalEl) {
+  closeAllModals();
+  modalEl?.classList.add('show');
+}
+// Replace lines like `$('#postModal')?.classList.add('show')` with:
+/// openOnly($('#postModal'));
+// Do the same for auth/details/verifyPrompt where they open.
 
 // ------------------------------
 // Self-test
