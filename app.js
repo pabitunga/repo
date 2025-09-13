@@ -18,13 +18,15 @@ import {
 // ------------------------------
 // Config — replace with your project values
 // ------------------------------
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyCBQfwpbnDdPPl0LdeXPWAc_o-Nd67EnsY",
+  authDomain: "jobs-ff5a9.firebaseapp.com",
+  projectId: "jobs-ff5a9",
+  storageBucket: "jobs-ff5a9.firebasestorage.app",
+  messagingSenderId: "110232650978",
+  appId: "1:110232650978:web:64c20408089e75487f8abb",
+  measurementId: "G-WW68CSEMM6"
 };
 
 let app, auth, db, unsubscribeJobs = null;
