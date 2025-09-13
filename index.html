@@ -2,255 +2,275 @@
 <html lang="en" data-color-scheme="light">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Faculty Jobs • Neo UI</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Neo Jobs</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <!-- Navbar -->
-  <div class="navbar">
+  <!-- Top Nav -->
+  <nav class="navbar">
     <div class="container nav-inner">
       <div class="brand">
         <div class="brand-logo" aria-hidden="true"></div>
-        <h1>Faculty Jobs • Neo</h1>
+        <h1>Neo Jobs</h1>
       </div>
       <div class="nav-actions">
-        <span class="chip" title="Current role">Role: <strong id="roleName">GUEST</strong></span>
-        <a class="btn ghost" href="#post" id="postJobBtn">Post a Job</a>
-        <button class="btn" id="signInBtn">Login</button>
-        <button class="btn" id="signOutBtn" style="display:none">Sign Out</button>
-        <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">🌙</button>
+        <span class="chip">Role: <strong id="roleName">GUEST</strong></span>
+        <button id="postJobBtn" class="btn">Post a Job</button>
+        <button id="signInBtn" class="btn primary">Login / Sign up</button>
+        <button id="signOutBtn" class="btn" style="display:none">Sign out</button>
+        <button id="themeToggle" class="theme-toggle" title="Toggle theme">🌙</button>
       </div>
     </div>
-  </div>
+  </nav>
 
   <!-- Hero -->
   <header class="hero">
     <div class="container wrap">
-      <div>
-        <h2>Find your next academic role with a friction-free, gorgeous UI.</h2>
-        <p>Search, filter, and apply across universities worldwide. Save roles, track deadlines, and—if you're admin—approve postings with one click.</p>
+      <div class="col-4">
+        <h2>Find & share academic positions faster</h2>
+        <p>Verified employers, admin approvals, and smart filters for subjects & positions.</p>
         <div class="hero-cta">
-          <a href="#jobs" class="btn primary">Browse Jobs</a>
-          <a href="#featured" class="btn">Closing Soon</a>
-          <a href="#archived" class="btn">Archived</a>
+          <a class="btn primary" href="#open">Browse jobs</a>
+          <button id="modeOpenPost" class="btn">Post a Job</button>
         </div>
       </div>
-      <div class="hero-card">
+      <aside class="hero-card col-4">
         <div class="kpi">
-          <div class="box"><h4 id="kpiActive">0</h4><span>Active Positions</span></div>
-          <div class="box"><h4 id="kpiFeatured">0</h4><span>Closing Soon</span></div>
-          <div class="box"><h4 id="kpiSaved">0</h4><span>Saved</span></div>
+          <div class="box">
+            <h4 id="kpiActive">0</h4>
+            <span>Open roles</span>
+          </div>
+          <div class="box">
+            <h4 id="kpiFeatured">0</h4>
+            <span>Closing soon</span>
+          </div>
+          <div class="box">
+            <h4 id="kpiSaved">0</h4>
+            <span>Saved</span>
+          </div>
         </div>
-      </div>
+      </aside>
     </div>
   </header>
 
-  <!-- Main -->
-  <main>
-    <!-- Jobs -->
-    <section id="jobs" class="section container stack-6">
-      <div class="stack-4">
+  <!-- Featured -->
+  <section class="section" id="featured">
+    <div class="container">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <h3>Featured (closing within 30 days)</h3>
+      </div>
+      <div id="featuredGrid" class="grid"></div>
+    </div>
+  </section>
+
+  <!-- Filters + Open positions -->
+  <section class="section" id="open">
+    <div class="container">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
         <h3>Open Positions</h3>
-        <div class="filters">
-          <input class="input" id="q" placeholder="Search by title or institution…" />
-          <select class="select" id="fDept"><option value="">All Departments</option></select>
-          <select class="select" id="fLevel"><option value="">All Levels</option></select>
-          <select class="select" id="fLoc"><option value="">All Locations</option></select>
-          <button class="btn" id="clearFilters">Clear</button>
+        <small id="resultsInfo">0 positions found</small>
+      </div>
+
+      <div class="filters">
+        <label>
+          Search
+          <input id="q" class="input" type="search" placeholder="Title or Institution…" />
+        </label>
+        <label>
+          Subject / Dept
+          <select id="fDept" class="select">
+            <option value="">All</option>
+          </select>
+        </label>
+        <label>
+          Position / Level
+          <select id="fLevel" class="select">
+            <option value="">All</option>
+          </select>
+        </label>
+        <label>
+          Region
+          <select id="fLoc" class="select">
+            <option value="">All</option>
+          </select>
+        </label>
+        <div>
+          <label>&nbsp;</label>
+          <button id="clearFilters" class="btn">Clear</button>
         </div>
       </div>
-      <div id="resultsInfo" style="color:var(--color-text-2)">Loading jobs…</div>
-      <div class="grid" id="grid"></div>
-      <div id="emptyState" class="empty" style="display:none">No jobs matched your filters.</div>
-    </section>
 
-    <!-- Featured -->
-    <section id="featured" class="section container stack-6">
-      <h3>Closing Soon</h3>
-      <div class="grid" id="featuredGrid"></div>
-    </section>
+      <div id="grid" class="grid" style="margin-top:14px"></div>
+      <div id="emptyState" class="empty" style="display:none">No jobs match your filters.</div>
+    </div>
+  </section>
 
-    <!-- Archived -->
-    <section id="archived" class="section container stack-6">
-      <h3>Archived</h3>
-      <div class="grid" id="archivedGrid"></div>
-    </section>
-  </main>
+  <!-- Archived -->
+  <section class="section" id="archived">
+    <div class="container">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <h3>Archived (expired or archived by admin)</h3>
+      </div>
+      <div id="archivedGrid" class="grid"></div>
+    </div>
+  </section>
 
   <!-- Footer -->
   <footer>
-    Built with ❤️ using your palette and improved UX patterns. Login to post jobs; admins can approve pending posts.
+    <div class="container">
+      <small>Built with Firebase Auth + Firestore. Admin approves employers & jobs.</small>
+    </div>
   </footer>
 
-  <!-- Post Job Modal -->
-  <div class="modal" id="postModal" role="dialog" aria-modal="true" aria-labelledby="postTitle">
-    <div class="sheet">
-      <header>
-        <h4 id="postTitle" style="margin:0">Post a Job</h4>
-        <button class="btn" id="closePost">Close</button>
-      </header>
-      <div class="body stack-4">
-        <div class="grid" style="grid-template-columns: repeat(12,1fr); gap:12px">
-          <div class="col-4" style="grid-column: span 12">
-            <label>Title
-              <input class="input" id="pTitle" required/>
-            </label>
-          </div>
-
-          <div class="col-4" style="grid-column: span 6">
-            <label>Institution
-              <select class="select" id="pInstSel"></select>
-            </label>
-            <div id="pInstOtherWrap" style="display:none">
-              <label>Institution (Other)
-                <input class="input" id="pInstOther" />
-              </label>
-            </div>
-          </div>
-
-          <div class="col-4" style="grid-column: span 6">
-            <label>Location
-              <select class="select" id="pLocSel"></select>
-            </label>
-            <div id="pLocOtherWrap" style="display:none">
-              <label>Location (Other)
-                <input class="input" id="pLocOther" placeholder="City, State, Country"/>
-              </label>
-            </div>
-          </div>
-
-          <div class="col-4" style="grid-column: span 6">
-            <label>Subject(s) <small style="color:var(--color-text-2)">select multiple</small>
-              <select class="select" id="pDept" multiple size="6"></select>
-            </label>
-            <div id="pDeptOtherWrap" style="display:none">
-              <label>Other Subject(s) (comma-separated)
-                <input class="input" id="pDeptOther" placeholder="e.g., Oceanography, AI Safety"/>
-              </label>
-            </div>
-          </div>
-
-          <div class="col-4" style="grid-column: span 6">
-            <label>Position(s) <small style="color:var(--color-text-2)">select multiple</small>
-              <select class="select" id="pLevel" multiple size="5"></select>
-            </label>
-            <div id="pLevelOtherWrap" style="display:none">
-              <label>Other Position(s) (comma-separated)
-                <input class="input" id="pLevelOther" placeholder="e.g., Visiting Professor, Adjunct"/>
-              </label>
-            </div>
-          </div>
-
-          <div class="col-4" style="grid-column: span 12">
-            <label>Description
-              <textarea class="input" id="pDesc" rows="4" required></textarea>
-            </label>
-          </div>
-
-          <div class="col-4" style="grid-column: span 6">
-            <label>Deadline
-              <input class="input" id="pDead" type="date" required/>
-            </label>
-          </div>
-
-          <div class="col-4" style="grid-column: span 6">
-            <label>Apply Link
-              <input class="input" id="pLink" placeholder="https://…"/>
-            </label>
-          </div>
-        </div>
-
-        <div style="display:flex; gap:10px; justify-content:flex-end">
-          <button class="btn" id="submitPost">Submit</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Details Modal -->
-  <div class="modal" id="detailsModal" role="dialog" aria-modal="true" aria-labelledby="detailsTitle">
-    <div class="sheet">
-      <header>
-        <h4 id="detailsTitle" style="margin:0">Job Details</h4>
-        <button class="btn" id="closeDetails">Close</button>
-      </header>
-      <div class="body" id="detailsBody"></div>
-    </div>
-  </div>
-
-  <!-- Auth Modal -->
-  <div class="modal" id="authModal" role="dialog" aria-modal="true" aria-labelledby="authTitle">
-    <div class="sheet">
-      <header>
-        <h4 id="authTitle" style="margin:0">Login</h4>
-        <button class="btn" id="closeAuth">Close</button>
-      </header>
-      <div class="body stack-4">
-        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
-          <button class="btn" id="modeSignin">Login</button>
-          <button class="btn" id="modeSignup">Create Account</button>
-          <span id="verifyNote" style="display:none; color:var(--color-warning); font-size:13px">Verify your email to continue.</span>
-        </div>
-
-        <div class="grid" style="grid-template-columns: repeat(12,1fr); gap:12px">
-          <div class="col-4" style="grid-column: span 6" id="nameWrap" hidden>
-            <label>Full Name
-              <input class="input" id="authName" />
-            </label>
-          </div>
-          <div class="col-4" style="grid-column: span 6">
-            <label>Email
-              <input class="input" id="authEmail" type="email" required />
-            </label>
-          </div>
-
-          <!-- Role selector (Create Account only) -->
-          <div class="col-4" style="grid-column: span 6" id="roleWrap" hidden>
-            <label>Role</label>
-            <div style="display:flex; gap:16px; align-items:center; margin-top:8px">
-              <label style="display:flex; align-items:center; gap:8px;">
-                <input type="radio" name="authRole" id="roleCandidate" value="CANDIDATE" checked>
-                Candidate
-              </label>
-              <label style="display:flex; align-items:center; gap:8px;">
-                <input type="radio" name="authRole" id="roleEmployer" value="EMPLOYER">
-                Employer
-              </label>
-              <!-- NEW: Employee alias -->
-              <label style="display:flex; align-items:center; gap:8px;">
-                <input type="radio" name="authRole" id="roleEmployee" value="EMPLOYEE">
-                Employee
-              </label>
-            </div>
-            <small style="color:var(--color-text-2); display:block; margin-top:6px">
-              Tip: <strong>Employee</strong> is the same as <strong>Candidate</strong> (job seeker).
-            </small>
-          </div>
-
-          <div class="col-4" style="grid-column: span 6">
-            <label>Password
-              <input class="input" id="authPass" type="password" required />
-            </label>
-          </div>
-        </div>
-
-        <div style="display:flex; gap:8px; justify-content:space-between; align-items:center">
-          <div style="display:flex; gap:8px; align-items:center">
-            <button class="btn" id="authSubmit">Continue</button>
-            <button class="btn" id="sendVerify" style="display:none">Resend Verification</button>
-            <button class="btn" id="forgotPass">Forgot Password?</button>
-          </div>
-          <small style="color:var(--color-text-2)">Role comes from your profile in Firestore automatically.</small>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <!-- Toasts -->
-  <div class="toasts" id="toasts"></div>
+  <div id="toasts" class="toasts" aria-live="polite"></div>
 
-  <!-- App (module) -->
+  <!-- AUTH MODAL -->
+  <div class="modal" id="authModal" aria-hidden="true">
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+      <header>
+        <h3 id="authTitle">Login</h3>
+        <button id="closeAuth" class="btn ghost">✖</button>
+      </header>
+      <div class="body">
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <button id="modeSignin" class="btn primary">Login</button>
+          <button id="modeSignup" class="btn">Create Account</button>
+        </div>
+
+        <div id="nameWrap" class="stack-4" hidden>
+          <label>Full name
+            <input id="authName" class="input" type="text" placeholder="Your name" />
+          </label>
+        </div>
+
+        <div class="stack-4">
+          <label>Email
+            <input id="authEmail" class="input" type="email" placeholder="name@example.com" />
+          </label>
+          <label>Password
+            <input id="authPass" class="input" type="password" placeholder="••••••••" />
+          </label>
+        </div>
+
+        <div id="roleWrap" class="stack-4" style="margin-top:6px" hidden>
+          <label><small>Choose role for this account</small></label>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <label class="chip"><input type="radio" name="authRole" value="CANDIDATE" checked /> Candidate</label>
+            <label class="chip"><input type="radio" name="authRole" value="EMPLOYER" /> Employer</label>
+            <label class="chip"><input type="radio" name="authRole" value="EMPLOYEE" /> Employee</label>
+          </div>
+          <small>Employers require admin approval after email verification.</small>
+        </div>
+
+        <div style="display:flex;gap:10px;align-items:center;margin-top:10px">
+          <button id="authSubmit" class="btn primary" data-mode="signin">Continue</button>
+          <button id="forgotPass" class="btn">Forgot password</button>
+          <span id="verifyNote" style="display:none">Please verify your email to continue.</span>
+          <button id="sendVerify" class="btn" style="display:none">Send verification</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- POST JOB MODAL -->
+  <div class="modal" id="postModal">
+    <div class="sheet">
+      <header>
+        <h3>Post a Job</h3>
+        <button id="closePost" class="btn ghost">✖</button>
+      </header>
+      <div class="body">
+        <div class="grid" style="grid-template-columns: repeat(auto-fit,minmax(260px,1fr)); gap:12px">
+          <label>Job Title
+            <input id="pTitle" class="input" type="text" placeholder="Assistant Professor (CS)" />
+          </label>
+
+          <label>Institution (Most cases)
+            <select id="pInstSel" class="select"></select>
+          </label>
+          <div id="pInstOtherWrap" style="display:none">
+            <label>Institution (Other)
+              <input id="pInstOther" class="input" type="text" placeholder="Type new institution" />
+            </label>
+          </div>
+
+          <label>Location (Most cases)
+            <select id="pLocSel" class="select"></select>
+          </label>
+          <div id="pLocOtherWrap" style="display:none">
+            <label>Location (Other)
+              <input id="pLocOther" class="input" type="text" placeholder="City, State, Country" />
+            </label>
+          </div>
+
+          <label>Subject / Department (multi)
+            <select id="pDept" class="select" multiple></select>
+          </label>
+          <div id="pDeptOtherWrap" style="display:none">
+            <label>Add more subjects (comma-separated)
+              <input id="pDeptOther" class="input" type="text" placeholder="Quantum Computing, AI Systems" />
+            </label>
+          </div>
+
+          <label>Position / Level (multi)
+            <select id="pLevel" class="select" multiple></select>
+          </label>
+          <div id="pLevelOtherWrap" style="display:none">
+            <label>Add more levels (comma-separated)
+              <input id="pLevelOther" class="input" type="text" placeholder="Adjunct, Teaching Fellow" />
+            </label>
+          </div>
+
+          <label class="col-4">Description
+            <textarea id="pDesc" class="input" rows="5" placeholder="Short summary, requirements, benefits…"></textarea>
+          </label>
+
+          <label>Deadline (YYYY-MM-DD)
+            <input id="pDead" class="input" type="date" />
+          </label>
+
+          <label>Application Link
+            <input id="pLink" class="input" type="url" placeholder="https://example.com/apply" />
+          </label>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-top:12px">
+          <button id="submitPost" class="btn primary">Submit</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DETAILS MODAL -->
+  <div class="modal" id="detailsModal">
+    <div class="sheet">
+      <header>
+        <h3>Job Details</h3>
+        <button id="closeDetails" class="btn ghost">✖</button>
+      </header>
+      <div id="detailsBody" class="body"></div>
+    </div>
+  </div>
+
+  <!-- VERIFY PROMPT MODAL (after Sign Up) -->
+  <div class="modal" id="verifyPrompt">
+    <div class="sheet">
+      <header>
+        <h3>Email verification</h3>
+        <button class="btn ghost" id="closeVerifyPrompt">✖</button>
+      </header>
+      <div class="body">
+        <p>To activate your account, we’ll send a verification link to <strong id="verifyPromptEmail"></strong>.</p>
+        <p>Press <strong>OK</strong> to receive the email.</p>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:12px">
+          <button class="btn" id="cancelVerifyPrompt">Cancel</button>
+          <button class="btn primary" id="sendVerifyNow">OK, send email</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script type="module" src="app.js"></script>
 </body>
 </html>
