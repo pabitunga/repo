@@ -16,7 +16,7 @@
       </div>
       <div class="nav-actions">
         <span class="chip" title="Current role">Role: <strong id="roleName">GUEST</strong></span>
-        <button class="btn ghost" id="postJobBtn">Post a Job</button>
+        <a class="btn ghost" href="#post" id="postJobBtn">Post a Job</a>
         <button class="btn" id="signInBtn">Login</button>
         <button class="btn" id="signOutBtn" style="display:none">Sign Out</button>
         <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">🌙</button>
@@ -33,6 +33,7 @@
         <div class="hero-cta">
           <a href="#jobs" class="btn primary">Browse Jobs</a>
           <a href="#featured" class="btn">Closing Soon</a>
+          <a href="#archived" class="btn">Archived</a>
         </div>
       </div>
       <div class="hero-card">
@@ -68,6 +69,12 @@
     <section id="featured" class="section container stack-6">
       <h3>Closing Soon</h3>
       <div class="grid" id="featuredGrid"></div>
+    </section>
+
+    <!-- Archived -->
+    <section id="archived" class="section container stack-6">
+      <h3>Archived</h3>
+      <div class="grid" id="archivedGrid"></div>
     </section>
   </main>
 
@@ -185,6 +192,7 @@
           <button class="btn" id="modeSignup">Create Account</button>
           <span id="verifyNote" style="display:none; color:var(--color-warning); font-size:13px">Verify your email to continue.</span>
         </div>
+
         <div class="grid" style="grid-template-columns: repeat(12,1fr); gap:12px">
           <div class="col-4" style="grid-column: span 6" id="nameWrap" hidden>
             <label>Full Name
@@ -196,12 +204,29 @@
               <input class="input" id="authEmail" type="email" required />
             </label>
           </div>
+
+          <!-- Role selector (shown in Create Account mode) -->
+          <div class="col-4" style="grid-column: span 6" id="roleWrap" hidden>
+            <label>Role</label>
+            <div style="display:flex; gap:16px; align-items:center; margin-top:8px">
+              <label style="display:flex; align-items:center; gap:8px;">
+                <input type="radio" name="authRole" id="roleCandidate" value="CANDIDATE" checked>
+                Candidate
+              </label>
+              <label style="display:flex; align-items:center; gap:8px;">
+                <input type="radio" name="authRole" id="roleEmployer" value="EMPLOYER">
+                Employer
+              </label>
+            </div>
+          </div>
+
           <div class="col-4" style="grid-column: span 6">
             <label>Password
               <input class="input" id="authPass" type="password" required />
             </label>
           </div>
         </div>
+
         <div style="display:flex; gap:8px; justify-content:space-between; align-items:center">
           <div style="display:flex; gap:8px; align-items:center">
             <button class="btn" id="authSubmit">Continue</button>
