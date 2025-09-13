@@ -302,7 +302,7 @@ const authEls = {
   modeSignin: $('#modeSignin'), modeSignup: $('#modeSignup'),
   authTitle: $('#authTitle'), nameWrap: $('#nameWrap'), authName: $('#authName'),
   authEmail: $('#authEmail'), authPass: $('#authPass'), authSubmit: $('#authSubmit'),
-  sendVerify: $('#sendVerify'), verifyNote: $('#verifyNote'),
+  sendVerify: $('#sendVerify'), verifyNote: $('#verifyNote'],
   forgotPass: $('#forgotPass'), roleName: $('#roleName'),
   roleWrap: $('#roleWrap')
 };
@@ -420,7 +420,7 @@ function updateAuthUI() {
 }
 
 // ------------------------------
-// Job actions (post / approve / reject / save / details)
+// Job actions (post / approve / reject / save / details / archive)
 // ------------------------------
 const postBtn = $('#postJobBtn');
 if (postBtn) postBtn.addEventListener('click', (e) => {
@@ -469,12 +469,16 @@ if (submitPost) submitPost.addEventListener('click', async () => {
   } catch (e) { console.error(e); toast('Failed to post job'); }
 });
 
-// Grid delegated events
-const grid = $('#grid'); if (grid) grid.addEventListener('click', async (e) => {
+// Grid delegated events (MAIN grid)
+const grid = $('#grid'); 
+if (grid) grid.addEventListener('click', async (e) => {
   const save = e.target.closest?.('[data-save]');
   const det  = e.target.closest?.('[data-details]');
   const ap   = e.target.closest?.('[data-approve]');
   const rj   = e.target.closest?.('[data-reject]');
+  // NEW: archive/unarchive
+  const ar   = e.target.closest?.('[data-archive]');
+  const un   = e.target.closest?.('[data-unarchive]');
 
   if (save) {
     const id = save.getAttribute('data-save');
@@ -492,12 +496,67 @@ const grid = $('#grid'); if (grid) grid.addEventListener('click', async (e) => {
     const id = rj.getAttribute('data-reject');
     try { await updateDoc(doc(db, 'jobs', id), { approved: false, active:false }); toast('Rejected'); } catch(e){ console.error(e); toast('Rejection failed'); }
   }
+  if (ar) {
+    if (state.role !== 'ADMIN') return toast('Admin only');
+    const id = ar.getAttribute('data-archive');
+    try { await updateDoc(doc(db, 'jobs', id), { archived: true, active: false }); toast('Archived'); }
+    catch(e){ console.error(e); toast('Archive failed'); }
+  }
+  if (un) {
+    if (state.role !== 'ADMIN') return toast('Admin only');
+    const id = un.getAttribute('data-unarchive');
+    try { await updateDoc(doc(db, 'jobs', id), { archived: false, active: true }); toast('Unarchived'); }
+    catch(e){ console.error(e); toast('Unarchive failed'); }
+  }
 });
-const fGrid = $('#featuredGrid'); if (fGrid) fGrid.addEventListener('click', (e) => {
+
+// Featured grid
+const fGrid = $('#featuredGrid'); 
+if (fGrid) fGrid.addEventListener('click', async (e) => {
   const det = e.target.closest?.('[data-details]');
   const save = e.target.closest?.('[data-save]');
+  const ar   = e.target.closest?.('[data-archive]');
+  const un   = e.target.closest?.('[data-unarchive]');
+
   if (det) { openDetails(det.getAttribute('data-details')); }
-  if (save) { const id = save.getAttribute('data-save'); if (state.saved.has(id)) state.saved.delete(id); else state.saved.add(id); saveSync(); renderFeatured(); toast(state.saved.has(id) ? 'Job saved' : 'Removed from saved'); }
+  if (save) { 
+    const id = save.getAttribute('data-save'); 
+    if (state.saved.has(id)) state.saved.delete(id); else state.saved.add(id); 
+    saveSync(); renderFeatured(); toast(state.saved.has(id) ? 'Job saved' : 'Removed from saved'); 
+  }
+  if (ar) {
+    if (state.role !== 'ADMIN') return toast('Admin only');
+    const id = ar.getAttribute('data-archive');
+    try { await updateDoc(doc(db, 'jobs', id), { archived: true, active: false }); toast('Archived'); }
+    catch(e){ console.error(e); toast('Archive failed'); }
+  }
+  if (un) {
+    if (state.role !== 'ADMIN') return toast('Admin only');
+    const id = un.getAttribute('data-unarchive');
+    try { await updateDoc(doc(db, 'jobs', id), { archived: false, active: true }); toast('Unarchived'); }
+    catch(e){ console.error(e); toast('Unarchive failed'); }
+  }
+});
+
+// Archived grid (so Unarchive works there too)
+const aGrid = $('#archivedGrid');
+if (aGrid) aGrid.addEventListener('click', async (e) => {
+  const un  = e.target.closest?.('[data-unarchive]');
+  const det = e.target.closest?.('[data-details]');
+  const save = e.target.closest?.('[data-save]');
+
+  if (det) { openDetails(det.getAttribute('data-details')); }
+  if (save) {
+    const id = save.getAttribute('data-save');
+    if (state.saved.has(id)) state.saved.delete(id); else state.saved.add(id);
+    saveSync(); renderArchived(); toast(state.saved.has(id) ? 'Job saved' : 'Removed from saved');
+  }
+  if (un) {
+    if (state.role !== 'ADMIN') return toast('Admin only');
+    const id = un.getAttribute('data-unarchive');
+    try { await updateDoc(doc(db, 'jobs', id), { archived: false, active: true }); toast('Unarchived'); }
+    catch(e){ console.error(e); toast('Unarchive failed'); }
+  }
 });
 
 function openDetails(id) {
