@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Faculty Jobs UI</title>
+  <title>Faculty Jobs • Neo UI</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -80,7 +80,7 @@
 
   <!-- Footer -->
   <footer>
-    Built by Pabitra
+    Built with ❤️ using your palette and improved UX patterns. Login to post jobs; admins can approve pending posts.
   </footer>
 
   <!-- Post Job Modal -->
@@ -205,7 +205,7 @@
             </label>
           </div>
 
-          <!-- Role selector (shown in Create Account mode) -->
+          <!-- Role selector (Create Account only) -->
           <div class="col-4" style="grid-column: span 6" id="roleWrap" hidden>
             <label>Role</label>
             <div style="display:flex; gap:16px; align-items:center; margin-top:8px">
@@ -217,7 +217,15 @@
                 <input type="radio" name="authRole" id="roleEmployer" value="EMPLOYER">
                 Employer
               </label>
+              <!-- NEW: Employee alias -->
+              <label style="display:flex; align-items:center; gap:8px;">
+                <input type="radio" name="authRole" id="roleEmployee" value="EMPLOYEE">
+                Employee
+              </label>
             </div>
+            <small style="color:var(--color-text-2); display:block; margin-top:6px">
+              Tip: <strong>Employee</strong> is the same as <strong>Candidate</strong> (job seeker).
+            </small>
           </div>
 
           <div class="col-4" style="grid-column: span 6">
